@@ -54,13 +54,10 @@ impl<T: AsMut<[u8]>> Vga<T> {
             let p = self.slice.as_mut();
 
             for (chunk, character) in p.chunks_mut(2).zip(self.buffer.iter()) {
-                let (character, attribute) = character.as_bytes();
+                let bytes = character.as_ushort();
+                let p : *mut u8 = &mut chunk[0];
+                ptr::write_volatile(p as *mut u16, bytes);
 
-                let p = &mut chunk[0] as *mut u8;
-                ptr::write_volatile(p, character);
-
-                let p = &mut chunk[1] as *mut u8;
-                ptr::write_volatile(p, attribute);
             }
         }
     }

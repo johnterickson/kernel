@@ -34,8 +34,8 @@ impl Character {
         }
     }
 
-    pub fn as_bytes(&self) -> (u8, u8) {
-        (self.character, self.attribute)
+    pub fn as_ushort(&self) -> (u16) {
+        (self.character as u16) | ((self.attribute as u16) << 8)
     }
 }
 
@@ -49,6 +49,7 @@ mod tests {
 
         assert_eq!(character.character, b'a');
         assert_eq!(character.attribute, 0xD1);
+        assert_eq!(character.as_ushort(), b'a' as u16 | 0xD100);
 
         let character = Character::new(b'b', Color::Yellow, Color::Red);
 
