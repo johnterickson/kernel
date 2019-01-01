@@ -10,7 +10,11 @@ macro_rules! kprintln {
 macro_rules! kprint {
     ($ctx:ident, $($arg:tt)*) => ({
         use core::fmt::Write;
-        $ctx.write_fmt(format_args!($($arg)*)).unwrap();
-        $ctx.flush();
+        // let mut vga = $ctx.vga.lock();
+        // $vga.write_fmt(format_args!($($arg)*)).unwrap();
+        // $vga.flush();
+
+        $ctx.vga.lock().write_fmt(format_args!($($arg)*)).unwrap();
+        $ctx.vga.lock().flush();
     });
 }

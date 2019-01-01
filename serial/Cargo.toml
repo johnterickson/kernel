@@ -1,0 +1,12 @@
+[package]
+name = "serial"
+version = "0.1.0"
+authors = ["The intermezzOS team"]
+
+[dependencies]
+x86 = "0.8.1"
+common = { path = "../common" }
+
+[dependencies.spin]
+version = "0.4.4"
+default-features = false

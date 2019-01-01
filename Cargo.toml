@@ -5,11 +5,43 @@ authors = ["steveklabnik <steve@steveklabnik.com>"]
 
 [package.metadata.bootimage]
 default-target = "intermezzos.json"
+run-command = [
+    "qemu-system-x86_64", 
+    "-serial", "stdio",
+    "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-drive", "format=raw,file={}"
+    ]
 
 [workspace]
 
+
+# external
 [dependencies]
 bootloader = "0.3.4"
+
+[dependencies.spin]
+version = "0.4.10"
+default-features = false
+
+[dependencies.lazy_static]
+version = "1.2.0"
+default-features = false
+features = ["spin_no_std"]
+
+
+# internal
+
+[dependencies.common]
+path = "common"
+
+[dependencies.keyboard]
+path = "keyboard"
+
+[dependencies.interrupts]
+path = "interrupts"
+
+[dependencies.serial]
+path = "serial"
 
 [dependencies.vga]
 path = "vga"
