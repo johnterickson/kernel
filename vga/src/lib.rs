@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(nll)]
 
 use core::fmt;
 use core::fmt::Write;
@@ -16,7 +15,7 @@ const COLS: usize = 80;
 pub struct Vga<T: AsMut<[u8]>> {
     slice: T,
     buffer: [Character; ROWS * COLS],
-    position: usize,
+    pub position: usize,
     foreground_color: Color,
     background_color: Color,
 }
@@ -46,6 +45,10 @@ impl<T: AsMut<[u8]>> Vga<T> {
 
     pub fn set_background_color(&mut self, color: Color) {
         self.background_color = color;
+    }
+
+    pub fn invert(&mut self) {
+        core::mem::swap(&mut self.foreground_color, &mut self.background_color);
     }
 
     pub fn flush(&mut self) {
