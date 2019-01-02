@@ -194,6 +194,7 @@ pub fn _start() -> ! {
     let mut last_displayed = 0;
     loop
     {
+        //kprintln!(CONTEXT, "Reading COM1.");
         while let Some(b) = CONTEXT.com1.try_receive() {
             match b as char {
                 _ => kprint!(CONTEXT, "{}", b as char),
@@ -202,12 +203,14 @@ pub fn _start() -> ! {
             while CONTEXT.com1.try_write(b) != Ok(()) { }
         }
 
+        //kprintln!(CONTEXT, "Checking timer.");
         let ticks = CONTEXT.ticks();
-        if ticks - last_displayed > 00 {
+        if ticks - last_displayed > 0 {
             kprint_header!(CONTEXT, "ticks: {}\n", ticks);
             last_displayed = ticks;
         }
 
+        //kprintln!(CONTEXT, "Checking keyboard.");
         while let Some(b) = CONTEXT.keyboard.try_dequeue() {
             while CONTEXT.com1.try_write(b as u8) != Ok(()) { }
             match b {
@@ -222,6 +225,10 @@ pub fn _start() -> ! {
                     kprint!(CONTEXT, "{}", b);
                 }
             };
+        }
+
+        unsafe {
+            x86::shared::halt();
         }
     }
 }
