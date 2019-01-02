@@ -197,6 +197,9 @@ pub fn _start() -> ! {
         //kprintln!(CONTEXT, "Reading COM1.");
         while let Some(b) = CONTEXT.com1.try_receive() {
             match b as char {
+                 'Q' => {
+                    shutdown();
+                },
                 _ => kprint!(CONTEXT, "{}", b as char),
             };
             
@@ -215,12 +218,8 @@ pub fn _start() -> ! {
             while CONTEXT.com1.try_write(b as u8) != Ok(()) { }
             match b {
                 'Q' => {
-                    unsafe {
-                        // https://wiki.osdev.org/Shutdown
-                        // In newer versions of QEMU, you can pass -device isa-debug-exit,iobase=0xf4,iosize=0x04 on the command-line, and do: 
-                        x86::shared::io::outb(0xf4, 0x00);  
-                    }
-                }
+                    shutdown();
+                },
                 _ => {
                     kprint!(CONTEXT, "{}", b);
                 }
@@ -230,6 +229,14 @@ pub fn _start() -> ! {
         unsafe {
             x86::shared::halt();
         }
+    }
+}
+
+fn shutdown() {
+    unsafe {
+        // https://wiki.osdev.org/Shutdown
+        // In newer versions of QEMU, you can pass -device isa-debug-exit,iobase=0xf4,iosize=0x04 on the command-line, and do: 
+        x86::shared::io::outb(0xf4, 0x00);  
     }
 }
 
