@@ -39,7 +39,7 @@ struct FnPtr {
 impl core::fmt::Debug for Thread {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
         let rip = if self.state_ptr as usize == 0 { 0 } else { self.state().rip as usize};
-        write!(f, "[Id:{:x} &ctxt:{:x} rip:{:x}]", self.id, self.state_ptr as usize, rip)
+        write!(f, "[Id:{:x}:{} &ctxt:{:x} rip:{:x}]", self.id, self.name, self.state_ptr as usize, rip)
     }
 }
 
@@ -77,12 +77,14 @@ impl Thread {
             self.state_mut().regs.rcx = arg as *mut usize;
             self.state_mut().rip = Thread::thread_start as *mut usize;
         }
-        // kprintln!(CONTEXT, "Prepare: {:?}", self);
+        kprintln!(CONTEXT, "Prepare: {:?}", self);
     }
 
-    unsafe extern "C" fn thread_start(f_ptr: FnPtr, prev_thread: &mut Thread, this_thread: &mut Thread, arg: usize) {
+    //#[naked]
+    //#[inline(never)]
+    unsafe extern "sysv64" fn thread_start(f_ptr: FnPtr, prev_thread: &mut Thread, this_thread: &mut Thread, arg: usize) {
         // let ip = f_ptr.f as *const u8;
-        // kprintln!(CONTEXT, "thread_start arg:{:x} prev:{:?} current:{:?}", arg, prev_thread, this_thread);
+        kprintln!(CONTEXT, "thread_start arg:{:x} prev:{:?} current:{:?}", arg, prev_thread, this_thread);
         let mut context = ThreadContext
         {
             prev_thread: prev_thread,
@@ -101,12 +103,10 @@ impl Thread {
 
     #[naked]
     #[inline(never)]
-    pub extern "system" fn switch_to(&mut self, next: &Thread) -> () {
-        kprintln!(CONTEXT, "switch_to enter cur:{:?} next:{:?}", self, next); 
+    pub extern "sysv64" fn switch_to(&mut self, next: &Thread) {
+        //kprintln!(CONTEXT, "switch_to enter cur:{:?} next:{:?}", self, next); 
         unsafe {
         asm!("
-            mov rax, [rsp+8]
-            int 1
             push rbp
             push r15
             push r14
@@ -124,8 +124,7 @@ impl Thread {
             push rax
 
             mov rax, rsp
-            sub rax, 8
-            push rax // compute rsp
+            push rax // capture rsp
 
             // everything is now stored
             // save the stack pointer
@@ -138,9 +137,9 @@ impl Thread {
             xor rax, rax
             mov [rsi], rax 
 
-            add rsp, 8 // skip dummy rsp
+            pop rax // skip dummy rsp
 
-            // restore state
+            // // restore state
             pop rax
             pop rbx
             pop rcx
@@ -157,19 +156,14 @@ impl Thread {
             pop r15
             pop rbp
 
-            mov rax, [rsp]
-            int 3
-            jmp rax
-
-            //ret
+            ret
             " 
             : // no outputs
             : "{rdi}"(self as *const Thread), "{rsi}"(next as *const Thread)//, s"(body as fn()) 
-            : "rax", "rbx" // clobbers
+            : // no clobbers
             : "volatile", "intel");
             
         }
-        unreachable!("Fell out of switch_to");
     }
 }
 
@@ -201,8 +195,10 @@ impl Scheduler {
         loop {
             for t in self.threads.into_iter() {
                 if let Some(t) = t {
-                    kprintln!(CONTEXT, "Switching to thread {}: {}", t.id, t.name);
+                    // kprintln!(CONTEXT, "Switching to thread {}: {}", t.id, t.name);
+                    //::toggle_single_step();
                     self.scheduler_thread.switch_to(&t);
+                    // ::toggle_single_step();
                 } else {
                     break;
                 }

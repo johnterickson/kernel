@@ -158,10 +158,24 @@ impl SerialPort {
     }
 }
 
-impl Write for SerialPort {
+pub struct SerialPortWriter<'a> {
+    port: &'a SerialPort
+}
+
+impl<'a> SerialPortWriter<'a> {
+    pub fn from_port(port: &SerialPort) -> SerialPortWriter {
+        SerialPortWriter {
+            port: port
+        }
+    }
+}
+
+impl<'a> Write for SerialPortWriter<'a> {
     fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
         for b in s.bytes() {
-            while Err(()) == self.try_write(b) { }
+            while Err(()) == self.port.try_write(b) { 
+                self.port.on_interrupt();
+            }
         }
 
         Ok(())

@@ -13,9 +13,16 @@ macro_rules! kprintln {
 macro_rules! kprint {
     ($ctx:ident, $($arg:tt)*) => ({
         use core::fmt::Write;
-        let mut vga = $ctx.vga.lock();
-        vga.write_fmt(format_args!($($arg)*)).unwrap();
-        vga.flush();
+        use serial::SerialPortWriter;
+        {
+            let mut vga = $ctx.vga.lock();
+            vga.write_fmt(format_args!($($arg)*)).unwrap();
+            vga.flush();
+        }
+        {
+            let mut port_writer = SerialPortWriter::from_port(&($ctx).com1);
+            port_writer.write_fmt(format_args!($($arg)*)).unwrap();
+        }
     });
 }
 

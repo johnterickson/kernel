@@ -16,11 +16,12 @@ extern crate vga;
 #[macro_use]
 extern crate intermezzos;
 extern crate bootloader;
-extern crate x86;
 
 #[macro_use]
 extern crate lazy_static;
+extern crate lde;
 extern crate spin;
+extern crate x86;
 
 #[cfg(not(test))]
 pub mod panic;
@@ -95,8 +96,15 @@ pub fn _start() -> ! {
         kprintln!(CONTEXT, "Divide by zero: {:?}", state);
         loop {}
     }));
-    CONTEXT.idt.set_handler(1, make_idt_entry!(isr1, |state| {
-        kprintln!(CONTEXT, "Trap: {:?}", state);
+    CONTEXT.idt.set_handler(1, make_idt_entry!(isr1, |state: &mut interrupts::InterruptState| {
+        kprintln!(CONTEXT, "      Trap: {:?}", state);
+        unsafe {
+            let slice : &[u8] = core::slice::from_raw_parts(state.rip as *const u8, 8);
+            for (opcode, va) in lde::X64.iter(&slice, state.rip as u64).take(1) {
+                kprintln!(CONTEXT, "{:x}: {:?}", va, opcode);
+            }
+        }
+
         pic::eoi_for(1);
     }));
     CONTEXT.idt.set_handler(2, make_idt_entry!(isr2, |state| {
@@ -183,51 +191,27 @@ pub fn _start() -> ! {
     kprintln!(CONTEXT, "Enabling interrupts.");
     CONTEXT.idt.enable_interrupts();
 
-    // let mut main_thread = Scheduler::new();
-    //main_thread.create_thread("echo", echo, 0);
-    //main_thread.create_thread("clock", clock, 0);
-    //main_thread.create_thread("keyboard", keyboard, 0);
+    let mut main_thread = Scheduler::new();
+    main_thread.create_thread("echo", echo, 0);
+    main_thread.create_thread("clock", clock, 0);
+    main_thread.create_thread("keyboard", keyboard, 0);
 
     kprintln!(CONTEXT, "Beginning main loop.");
-    // main_thread.run();
+    main_thread.run();
+}
 
-    let mut last_displayed = 0;
-    loop
-    {
-        //kprintln!(CONTEXT, "Reading COM1.");
-        while let Some(b) = CONTEXT.com1.try_receive() {
-            match b as char {
-                 'Q' => {
-                    shutdown();
-                },
-                _ => kprint!(CONTEXT, "{}", b as char),
-            };
-            
-            while CONTEXT.com1.try_write(b) != Ok(()) { }
-        }
-
-        //kprintln!(CONTEXT, "Checking timer.");
-        let ticks = CONTEXT.ticks();
-        if ticks - last_displayed > 0 {
-            kprint_header!(CONTEXT, "ticks: {}\n", ticks);
-            last_displayed = ticks;
-        }
-
-        //kprintln!(CONTEXT, "Checking keyboard.");
-        while let Some(b) = CONTEXT.keyboard.try_dequeue() {
-            while CONTEXT.com1.try_write(b as u8) != Ok(()) { }
-            match b {
-                'Q' => {
-                    shutdown();
-                },
-                _ => {
-                    kprint!(CONTEXT, "{}", b);
-                }
-            };
-        }
-
+fn toggle_single_step() {
+    unsafe {
         unsafe {
-            x86::shared::halt();
+            asm!("
+                pushf
+                xor  qword ptr [rsp], 100h
+                popf
+                " 
+                : // no outputs
+                : // no inputs
+                : // no clobbers
+                : "volatile", "intel");
         }
     }
 }
@@ -244,10 +228,11 @@ pub fn echo(ctxt: &mut ThreadContext, _arg: usize) {
     loop { 
         while let Some(b) = CONTEXT.com1.try_receive() {
             match b as char {
-                _ => kprint!(CONTEXT, "{}", b as char),
+                'Q' => { shutdown(); },
+                _ => {},
             };
             
-            while CONTEXT.com1.try_write(b) != Ok(()) { }
+            kprint!(CONTEXT, "{}", b as char);
         }
         ctxt.yield_to();
     }
@@ -261,10 +246,8 @@ pub fn clock(ctxt: &mut ThreadContext, _arg: usize) {
             kprint_header!(CONTEXT, "ticks: {}\n", ticks);
             last_displayed = ticks;
         }
-        kprintln!(CONTEXT, "Yielding from clock.");
+        
         ctxt.yield_to();
-        kprintln!(CONTEXT, "Returned to clock.");
-
     }
 }
 
@@ -274,12 +257,8 @@ pub fn keyboard(ctxt: &mut ThreadContext, _arg: usize) {
             while CONTEXT.com1.try_write(b as u8) != Ok(()) { }
             match b {
                 'Q' => {
-                    unsafe {
-                        // https://wiki.osdev.org/Shutdown
-                        // In newer versions of QEMU, you can pass -device isa-debug-exit,iobase=0xf4,iosize=0x04 on the command-line, and do: 
-                        x86::shared::io::outb(0xf4, 0x00);  
-                    }
-                }
+                    shutdown();
+                },
                 _ => {
                     kprint!(CONTEXT, "{}", b);
                 }

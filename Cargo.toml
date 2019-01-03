@@ -7,8 +7,9 @@ authors = ["steveklabnik <steve@steveklabnik.com>"]
 default-target = "intermezzos.json"
 run-command = [
         "qemu-system-x86_64", 
-        "-serial", "stdio",
         "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        #"-serial", "stdio",
+        "-nographic",
         "-drive", "format=raw,file={}"
     ]
 
@@ -19,6 +20,7 @@ run-command = [
 [dependencies]
 bootloader = "0.3.4"
 x86 = "0.8.1"
+lde = "0.3"
 
 [dependencies.spin]
 version = "0.4.10"
