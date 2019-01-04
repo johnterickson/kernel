@@ -201,7 +201,6 @@ pub fn _start() -> ! {
 }
 
 fn toggle_single_step() {
-    unsafe {
         unsafe {
             asm!("
                 pushf
@@ -213,7 +212,6 @@ fn toggle_single_step() {
                 : // no clobbers
                 : "volatile", "intel");
         }
-    }
 }
 
 fn shutdown() {

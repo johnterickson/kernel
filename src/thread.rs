@@ -11,11 +11,13 @@ pub struct ThreadState {
     rip: *mut usize,
 }
 
+const STACK_SIZE : usize = 32 * 1024;
+
 #[repr(C)]
 pub struct Thread {
     state_ptr: *mut ThreadState,
     pub id: usize,
-    stack: [u8;8*1024],
+    stack: [u8; STACK_SIZE],
     pub name: &'static str,
 }
 
@@ -48,7 +50,7 @@ impl Thread {
         Thread {
             state_ptr: core::ptr::null_mut(),
             id: id,
-            stack: [0x0u8; 8*1024],
+            stack: [0x0u8; STACK_SIZE],
             name: name,
         }    
     }
