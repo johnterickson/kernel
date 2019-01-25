@@ -2,6 +2,8 @@
 #![feature(const_fn)]
 #![feature(core_intrinsics)]
 #![feature(naked_functions)]
+#![feature(align_offset)]
+#![feature(alloc_error_handler)]
 #![no_std]
 #![no_main]
 
@@ -23,6 +25,8 @@ extern crate lde;
 extern crate spin;
 extern crate x86;
 
+extern crate wasmi;
+
 #[cfg(not(test))]
 pub mod panic;
 mod thread;
@@ -35,6 +39,7 @@ use spin::Mutex;
 use serial::{SerialPort,COM1};
 use thread::*;
 use vga::Vga;
+use wasmi::{ImportsBuilder, Module, ModuleInstance, NopExternals, RuntimeValue};
 use x86::bits64::irq::IdtEntry;
 
 pub struct Context {
@@ -80,6 +85,61 @@ lazy_static! {
         Context::new(&IDT)
     };
 }
+
+
+use core::alloc::{GlobalAlloc, Layout};
+use core::ptr::null_mut;
+
+struct MyAllocator
+{
+    bytes: [u8; 1024*1024],
+    cur: *mut u8,
+    // max: *mut u8,
+}
+
+unsafe impl core::marker::Sync for MyAllocator {}
+
+unsafe impl GlobalAlloc for MyAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let mut new = self.cur;
+        if new == null_mut() {
+            new = &self.bytes[0] as *const u8 as *mut u8;
+            // (*(self as *const Self as *mut Self)).max = &self.bytes[1024*1024 - 1] as *const u8 as *mut u8;
+        }
+
+        // kprintln!(CONTEXT, "{:?} {:?}", layout, new);
+
+        // round  up
+        if layout.align() > 1 {
+            new = new.offset(new.align_offset(layout.align()) as isize);
+        }
+        kprintln!(CONTEXT, "{:?} {:?}", layout, new);
+
+
+        let p = new;
+        (*(self as *const Self as *mut Self)).cur = new.offset(layout.size() as isize);
+
+        // if self.cur >= self.max {
+            // return null_mut();
+        // }
+
+        p as *mut u8
+    }
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+}
+
+#[alloc_error_handler]
+fn foo(layout: core::alloc::Layout) -> ! {
+    panic!("Could not reserve: {:?}", layout);
+}
+
+#[global_allocator]
+static A: MyAllocator = MyAllocator {
+    bytes: [0u8; 1024*1024],
+    cur: null_mut(),
+    // max: null_mut(),
+};
+
 
 #[no_mangle]
 pub fn _start() -> ! {
@@ -196,22 +256,62 @@ pub fn _start() -> ! {
     main_thread.create_thread("clock", clock, 0);
     main_thread.create_thread("keyboard", keyboard, 0);
 
+
+    let bytes = include_bytes!("../../wasmer-rust-example/wasm-sample-app/target/wasm32-unknown-unknown/release/wasm_sample_app.wasm");
+
+    disable_write_protect_bit();
+    let module = wasmi::Module::from_buffer(&bytes[..]).unwrap();
+    assert!(module.deny_floating_point().is_ok());
+    
+    let main = ModuleInstance::new(&module, &ImportsBuilder::default())
+        .expect("Failed to instantiate module")
+        .run_start(&mut NopExternals)
+        .expect("Failed to run start function in module");
+
+    let a : f32 = 1.0;
+    let b : f32 = 2.0;
+
+    let result = main.invoke_export("wasm_add", &[RuntimeValue::I32(1), RuntimeValue::I32(2)], &mut NopExternals);
+    kprintln!(CONTEXT, "Result: {:?} =? {}", result, a + b);
+
     kprintln!(CONTEXT, "Beginning main loop.");
+    
     main_thread.run();
 }
 
+#[no_mangle]
+pub extern fn fmod(n: f64, d: f64) -> f64 {
+    unimplemented!();
+}
+
+#[no_mangle]
+pub extern fn fmodf(n: f32, d: f32) -> f32 {
+    unimplemented!();
+}
+
+//float __truncdfsf2 (double a)
+#[no_mangle]
+pub extern fn __truncdfsf2(n: f64) -> f32 {
+    unimplemented!();
+}
+
+fn disable_write_protect_bit() {
+    use x86::shared::control_regs::{cr0, cr0_write, CR0_WRITE_PROTECT};
+    unsafe { cr0_write(cr0() & !CR0_WRITE_PROTECT) };
+}
+
 fn toggle_single_step() {
-        unsafe {
-            asm!("
-                pushf
-                xor  qword ptr [rsp], 100h
-                popf
-                " 
-                : // no outputs
-                : // no inputs
-                : // no clobbers
-                : "volatile", "intel");
-        }
+    unsafe {
+        asm!("
+            pushf
+            xor  qword ptr [rsp], 100h
+            popf
+            " 
+            : // no outputs
+            : // no inputs
+            : // no clobbers
+            : "volatile", "intel");
+    }
 }
 
 fn shutdown() {

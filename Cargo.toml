@@ -8,8 +8,8 @@ default-target = "intermezzos.json"
 run-command = [
         "qemu-system-x86_64", 
         "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04",
-        #"-serial", "stdio",
-        "-nographic",
+        "-serial", "stdio",
+        #"-nographic",
         "-drive", "format=raw,file={}"
     ]
 
@@ -31,6 +31,10 @@ version = "1.2.0"
 default-features = false
 features = ["spin_no_std"]
 
+[dependencies.wasmi]
+version = "0.4.3"
+default-features = false
+features = ["core"]
 
 # internal
 
