@@ -257,12 +257,12 @@ pub fn _start() -> ! {
     main_thread.create_thread("keyboard", keyboard, 0);
 
 
-    let bytes = include_bytes!("../../wasmer-rust-example/wasm-sample-app/target/wasm32-unknown-unknown/release/wasm_sample_app.wasm");
+    let bytes = include_bytes!("../wasm-sample-app/target/wasm32-unknown-unknown/release/wasm_sample_app.wasm");
 
     disable_write_protect_bit();
-    let module = wasmi::Module::from_buffer(&bytes[..]).unwrap();
+    let module = Module::from_buffer(&bytes[..]).unwrap();
     assert!(module.deny_floating_point().is_ok());
-    
+
     let main = ModuleInstance::new(&module, &ImportsBuilder::default())
         .expect("Failed to instantiate module")
         .run_start(&mut NopExternals)
@@ -280,18 +280,18 @@ pub fn _start() -> ! {
 }
 
 #[no_mangle]
-pub extern fn fmod(n: f64, d: f64) -> f64 {
+pub extern fn fmod(_n: f64, _d: f64) -> f64 {
     unimplemented!();
 }
 
 #[no_mangle]
-pub extern fn fmodf(n: f32, d: f32) -> f32 {
+pub extern fn fmodf(_n: f32, _d: f32) -> f32 {
     unimplemented!();
 }
 
 //float __truncdfsf2 (double a)
 #[no_mangle]
-pub extern fn __truncdfsf2(n: f64) -> f32 {
+pub extern fn __truncdfsf2(_n: f64) -> f32 {
     unimplemented!();
 }
 
@@ -300,6 +300,7 @@ fn disable_write_protect_bit() {
     unsafe { cr0_write(cr0() & !CR0_WRITE_PROTECT) };
 }
 
+#[warn(dead_code)]
 fn toggle_single_step() {
     unsafe {
         asm!("
