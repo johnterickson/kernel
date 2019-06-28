@@ -89,7 +89,7 @@ pub fn eoi_for(interrupt_number: isize) {
                 outb(PIC2_CMD_IO_PORT, 0x20);
                 outb(PIC1_CMD_IO_PORT, 0x20);
             },
-            32...40 => outb(PIC1_CMD_IO_PORT, 0x20),
+            32..=40 => outb(PIC1_CMD_IO_PORT, 0x20),
             _ => {},
         }
     }

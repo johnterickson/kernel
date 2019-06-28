@@ -2,7 +2,6 @@
 #![feature(const_fn)]
 #![feature(core_intrinsics)]
 #![feature(naked_functions)]
-#![feature(align_offset)]
 #![feature(alloc_error_handler)]
 #![no_std]
 #![no_main]
@@ -113,7 +112,7 @@ unsafe impl GlobalAlloc for MyAllocator {
         if layout.align() > 1 {
             new = new.offset(new.align_offset(layout.align()) as isize);
         }
-        kprintln!(CONTEXT, "{:?} {:?}", layout, new);
+        //kprintln!(CONTEXT, "{:?} {:?}", layout, new);
 
 
         let p = new;
@@ -140,6 +139,28 @@ static A: MyAllocator = MyAllocator {
     // max: null_mut(),
 };
 
+fn dump_last_instruction(state: &interrupts::InterruptState) {
+    let mut instruction_size = 16;
+    unsafe {
+        while instruction_size > 0 {
+            let ip = state.rip as usize - instruction_size;
+            let slice : &[u8] = core::slice::from_raw_parts(ip as *const u8, instruction_size);
+            if let Some(instruction) = lde::X64.iter(&slice, state.rip as u64).next() {
+                let (opcode, _va) = instruction;
+                if opcode.len() == instruction_size {
+                    kprintln!(CONTEXT, "{:x}: {:?}", ip, opcode);
+                    break;
+                }
+            }
+
+            instruction_size -= 1;
+        }
+    }
+
+    if instruction_size == 0 {
+        kprintln!(CONTEXT, "Unknown instruction before {:x}", state.rip as usize);
+    }
+}
 
 #[no_mangle]
 pub fn _start() -> ! {
@@ -157,13 +178,8 @@ pub fn _start() -> ! {
         loop {}
     }));
     CONTEXT.idt.set_handler(1, make_idt_entry!(isr1, |state: &mut interrupts::InterruptState| {
-        kprintln!(CONTEXT, "      Trap: {:?}", state);
-        unsafe {
-            let slice : &[u8] = core::slice::from_raw_parts(state.rip as *const u8, 8);
-            for (opcode, va) in lde::X64.iter(&slice, state.rip as u64).take(1) {
-                kprintln!(CONTEXT, "{:x}: {:?}", va, opcode);
-            }
-        }
+        kprintln!(CONTEXT, "Trap: {:?}", state);
+        dump_last_instruction(state);
 
         pic::eoi_for(1);
     }));
@@ -217,7 +233,8 @@ pub fn _start() -> ! {
     }));
     CONTEXT.idt.set_handler(14, make_idt_entry!(isr14, |state| {
         kprint!(CONTEXT, "Page fault: {:?}", state);
-        loop {}
+        //dump_last_instruction(state);
+        loop { unsafe { x86::shared::halt(); } }
     }));
 
     // IRQ0 (0) on PIC1 (32), so IDT index is 32
@@ -280,6 +297,26 @@ pub fn _start() -> ! {
 }
 
 #[no_mangle]
+pub extern fn fmin(_n: f64, _d: f64) -> f64 {
+    unimplemented!();
+}
+
+#[no_mangle]
+pub extern fn fminf(_n: f32, _d: f32) -> f32 {
+    unimplemented!();
+}
+
+#[no_mangle]
+pub extern fn fmax(_n: f64, _d: f64) -> f64 {
+    unimplemented!();
+}
+
+#[no_mangle]
+pub extern fn fmaxf(_n: f32, _d: f32) -> f32 {
+    unimplemented!();
+}
+
+#[no_mangle]
 pub extern fn fmod(_n: f64, _d: f64) -> f64 {
     unimplemented!();
 }
@@ -298,6 +335,36 @@ pub extern fn __truncdfsf2(_n: f64) -> f32 {
 fn disable_write_protect_bit() {
     use x86::shared::control_regs::{cr0, cr0_write, CR0_WRITE_PROTECT};
     unsafe { cr0_write(cr0() & !CR0_WRITE_PROTECT) };
+}
+
+fn get_eflags() -> usize {
+    let result : usize;
+    unsafe {
+        asm!("
+            pushf
+            pop rax
+            " 
+            : "={rax}"(result)
+            : // no inputs
+            : // no clobbers
+            : "volatile", "intel");
+    }
+    result
+}
+
+#[warn(dead_code)]
+fn disable_single_step() {
+    unsafe {
+        asm!("
+            pushf
+            and  qword ptr [rsp], ~100h
+            popf
+            " 
+            : // no outputs
+            : // no inputs
+            : // no clobbers
+            : "volatile", "intel");
+    }
 }
 
 #[warn(dead_code)]

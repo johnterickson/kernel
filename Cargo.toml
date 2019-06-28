@@ -16,10 +16,9 @@ run-command = [
 [workspace]
 exclude = ["wasm-sample-app"]
 
-
 # external
 [dependencies]
-bootloader = "0.3.4"
+bootloader = "0.5.1"
 x86 = "0.8.1"
 lde = "0.3"
 
@@ -33,9 +32,14 @@ default-features = false
 features = ["spin_no_std"]
 
 [dependencies.wasmi]
-version = "0.4.3"
+version = "=0.4.4"
 default-features = false
 features = ["core"]
+
+[patch.crates-io]
+wasmi = { git = 'https://github.com/johnterickson/wasmi.git' }
+# wasmi = { path = '../wasmi' }
+
 
 # internal
 

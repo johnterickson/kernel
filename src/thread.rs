@@ -5,6 +5,7 @@ extern crate x86;
 use ::CONTEXT;
 
 #[repr(C)]
+#[repr(align(16))]
 #[derive(Debug)]
 pub struct ThreadState {
     regs: interrupts::ProcessorState,
@@ -14,6 +15,7 @@ pub struct ThreadState {
 const STACK_SIZE : usize = 32 * 1024;
 
 #[repr(C)]
+#[repr(align(16))]
 pub struct Thread {
     state_ptr: *mut ThreadState,
     pub id: usize,
@@ -70,6 +72,7 @@ impl Thread {
     fn prepare(&mut self, prev_thread: &mut Thread, f: ThreadFunc, arg: usize) {
         unsafe {
             let stack_needed = core::mem::size_of::<ThreadState>() as usize;
+            let stack_needed = ((stack_needed + 15) / 16) * 16; // round up
             let stack_start_offset = (self.stack.len() as usize) - stack_needed;
             self.state_ptr = (&mut self.stack[0] as *mut u8).offset(stack_start_offset as isize) as *mut ThreadState;
             self.state_mut().regs.rsp = core::ptr::null_mut();
@@ -82,8 +85,8 @@ impl Thread {
         kprintln!(CONTEXT, "Prepare: {:?}", self);
     }
 
-    //#[naked]
-    //#[inline(never)]
+    #[naked]
+    #[inline(never)]
     unsafe extern "sysv64" fn thread_start(f_ptr: FnPtr, prev_thread: &mut Thread, this_thread: &mut Thread, arg: usize) {
         // let ip = f_ptr.f as *const u8;
         kprintln!(CONTEXT, "thread_start arg:{:x} prev:{:?} current:{:?}", arg, prev_thread, this_thread);
@@ -106,66 +109,72 @@ impl Thread {
     #[naked]
     #[inline(never)]
     pub extern "sysv64" fn switch_to(&mut self, next: &Thread) {
-        //kprintln!(CONTEXT, "switch_to enter cur:{:?} next:{:?}", self, next); 
+        // ::toggle_single_step();
         unsafe {
-        asm!("
-            push rbp
-            push r15
-            push r14
-            push r13
-            push r12
-            push r11
-            push r10
-            push r9
-            push r8
-            push rsi
-            push rdi
-            push rdx
-            push rcx
-            push rbx
-            push rax
+            kprintln!(CONTEXT, "switch_to enter cur:{:?} next:{:?} next.regs:{:?}", self, next, *next.state_ptr);
+            
+            asm!("
+                push rbp
+                push r15
+                push r14
+                push r13
+                push r12
+                push r11
+                push r10
+                push r9
+                push r8
+                push rsi
+                push rdi
+                push rdx
+                push rcx
+                push rbx
+                push rax
 
-            mov rax, rsp
-            push rax // capture rsp
+                mov rax, rsp
+                push rax // capture rsp
 
-            // everything is now stored
-            // save the stack pointer
-            mov [rdi], rsp
+                // everything is now stored
+                // save the stack pointer
+                mov [rdi], rsp
 
-            // switch to the other stack
-            mov rsp, [rsi]
+                // switch to the other stack
+                mov rsp, [rsi]
 
-            // null out context ptr as we are now active in that context
-            xor rax, rax
-            mov [rsi], rax 
+                // null out context ptr as we are now active in that context
+                xor rax, rax
+                mov [rsi], rax 
 
-            pop rax // skip dummy rsp
+                pop rax // skip dummy rsp
 
-            // // restore state
-            pop rax
-            pop rbx
-            pop rcx
-            pop rdx
-            pop rdi
-            pop rsi
-            pop r8
-            pop r9
-            pop r10
-            pop r11
-            pop r12
-            pop r13
-            pop r14
-            pop r15
-            pop rbp
+                // // restore state
+                pop rax
+                pop rbx
+                pop rcx
+                pop rdx
+                pop rdi
+                pop rsi
+                pop r8
+                pop r9
+                pop r10
+                pop r11
+                pop r12
+                pop r13
+                pop r14
+                pop r15
+                pop rbp
 
-            ret
-            " 
-            : // no outputs
-            : "{rdi}"(self as *const Thread), "{rsi}"(next as *const Thread)//, s"(body as fn()) 
-            : // no clobbers
-            : "volatile", "intel");
+                int 3
+
+                ret
+                " 
+                : // no outputs
+                : "{rdi}"(&self.state_ptr), "{rsi}"(&next.state_ptr)//, s"(body as fn()) 
+                : // no clobbers
+                : "volatile", "intel");
             
         }
+        
+        kprintln!(CONTEXT, "switch_to exit cur:{:?} next:{:?}", &self, next); 
     }
 }
 
@@ -185,6 +194,7 @@ impl Scheduler {
     }
 
     pub fn create_thread(&mut self, name: &'static str, f: ThreadFunc, arg: usize) -> usize {
+        assert!(self.free_index < 8);
         let new_id = self.free_index + 2;
         let t = Thread::new(new_id, name);
         self.threads[self.free_index] = Some(t);
@@ -197,7 +207,7 @@ impl Scheduler {
         loop {
             for t in self.threads.into_iter() {
                 if let Some(t) = t {
-                    // kprintln!(CONTEXT, "Switching to thread {}: {}", t.id, t.name);
+                    kprintln!(CONTEXT, "Switching to thread {}: {}", t.id, t.name);
                     //::toggle_single_step();
                     self.scheduler_thread.switch_to(&t);
                     // ::toggle_single_step();

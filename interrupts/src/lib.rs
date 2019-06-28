@@ -68,6 +68,13 @@ pub struct InterruptState {
     pub flags: *mut usize,
 }
 
+// impl core::fmt::Debug for InterruptState {
+//     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
+//         write!(f, "[rip:{:x} cs:{:x}]", self.rip as usize, self.cs as usize)
+//     }
+// }
+
+
 /// Creates an IDT entry.
 ///
 /// Creates an IDT entry that executes the expression in `body`.

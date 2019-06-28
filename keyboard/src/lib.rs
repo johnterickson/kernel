@@ -93,7 +93,7 @@ impl KeyboardData {
 
         if self.lshift || self.rshift {
             printable = match printable {
-                a @ 'a' ... 'z' => (a as u8 - ('a' as u8 - 'A' as u8)) as char,
+                a @ 'a' ..= 'z' => (a as u8 - ('a' as u8 - 'A' as u8)) as char,
                 a @ _ => a,
             };
         }
@@ -115,8 +115,8 @@ impl Keyboard {
 
     fn get_hex(i: u8) -> char {
         (match i {
-            0 ... 9 => i + ('0' as u8),
-            10 ... 15 => i - 10 + ('A' as u8),
+            0 ..= 9 => i + ('0' as u8),
+            10 ..= 15 => i - 10 + ('A' as u8),
             _ => panic!("Not a hex number!")
         }) as char
     }
